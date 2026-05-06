@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { buttonStyles } from "@/components/Button";
 import { useToast } from "@/components/ToastProvider";
@@ -53,10 +53,17 @@ function FulfillmentBadge({ status }: { status?: FulfillmentStatus }) {
   if (!status) return null;
   const styles: Record<FulfillmentStatus, string> = {
     pending: "bg-brand-50 text-brand-700",
+    confirmed: "bg-sky-50 text-sky-700",
     processing: "bg-amber-50 text-amber-700",
+    packed: "bg-amber-50 text-amber-700",
     shipped: "bg-sky-50 text-sky-700",
+    out_for_delivery: "bg-orange-50 text-orange-700",
     delivered: "bg-emerald-50 text-emerald-700",
     cancelled: "bg-stone-100 text-stone-600",
+    return_requested: "bg-rose-50 text-rose-700",
+    returned: "bg-stone-100 text-stone-600",
+    refunded: "bg-indigo-50 text-indigo-700",
+    rto: "bg-stone-100 text-stone-600",
     refund_requested: "bg-rose-50 text-rose-700",
   };
   return (
@@ -390,9 +397,23 @@ function OrdersTab() {
   );
 }
 
+type ShipmentSummary = {
+  _id: string;
+  awbNumber?: string;
+  shipmentStatus: string;
+  carrier?: string;
+  estimatedDeliveryDate?: string;
+  shippingLabel?: string;
+};
+
 function TrackingTab() {
   const { orders, isLoading, isHydrated } = useOrderHistory();
   const [selectedOrderId, setSelectedOrderId] = useState<string>("");
+  const [shipments, setShipments] = useState<ShipmentSummary[]>([]);
+  const [isLoadingShipments, setIsLoadingShipments] = useState(false);
+  const [isLive, setIsLive] = useState(false);
+  const esRef = useRef<EventSource | null>(null);
+  const [showReturnModal, setShowReturnModal] = useState(false);
 
   useEffect(() => {
     if (orders.length > 0 && !selectedOrderId) {
@@ -400,14 +421,53 @@ function TrackingTab() {
     }
   }, [orders, selectedOrderId]);
 
+  useEffect(() => {
+    if (!selectedOrderId) return;
+    setIsLoadingShipments(true);
+    fetch(`/api/shipments?orderId=${selectedOrderId}`)
+      .then((r) => r.json())
+      .then((d: { shipments?: ShipmentSummary[] }) => {
+        setShipments(d.shipments ?? []);
+      })
+      .catch(() => setShipments([]))
+      .finally(() => setIsLoadingShipments(false));
+  }, [selectedOrderId]);
+
+  useEffect(() => {
+    const awb = shipments[0]?.awbNumber;
+    if (!awb) return;
+    const status = shipments[0]?.shipmentStatus;
+    if (status === "delivered" || status === "returned_to_origin") return;
+
+    const es = new EventSource(`/api/track/${awb}/sse`);
+    esRef.current = es;
+    setIsLive(true);
+
+    es.addEventListener("update", (e) => {
+      try {
+        const parsed = JSON.parse(e.data) as { shipmentStatus: string; estimatedDeliveryDate?: string };
+        setShipments((prev) =>
+          prev.map((s, i) =>
+            i === 0
+              ? { ...s, shipmentStatus: parsed.shipmentStatus, estimatedDeliveryDate: parsed.estimatedDeliveryDate }
+              : s,
+          ),
+        );
+      } catch (_) {}
+    });
+
+    es.addEventListener("done", () => { es.close(); setIsLive(false); });
+    es.onerror = () => setIsLive(false);
+
+    return () => { es.close(); setIsLive(false); };
+  }, [shipments[0]?.awbNumber]);
+
   if (!isHydrated || isLoading) return <OrdersSkeleton />;
 
   if (orders.length === 0) {
     return (
       <div className="surface-elevated p-10 text-center">
-        <h3 className="text-3xl font-semibold tracking-[-0.04em] text-brand-900">
-          Nothing to track
-        </h3>
+        <h3 className="text-3xl font-semibold tracking-[-0.04em] text-brand-900">Nothing to track</h3>
         <p className="mt-3 text-sm leading-6 text-stone-500">
           Place an order to start tracking its delivery status.
         </p>
@@ -418,11 +478,25 @@ function TrackingTab() {
     );
   }
 
-  const selectedOrder: OrderRecord =
-    orders.find((o) => o._id === selectedOrderId) ?? orders[0];
+  const selectedOrder: OrderRecord = orders.find((o) => o._id === selectedOrderId) ?? orders[0];
   const completedSteps = getCompletedStepCount(selectedOrder.paymentStatus, selectedOrder.fulfillmentStatus);
+  const mainShipment = shipments[0];
+
+  const shipStatusColor: Record<string, string> = {
+    shipment_created: "bg-amber-50 text-amber-700",
+    awb_assigned: "bg-sky-50 text-sky-700",
+    pickup_scheduled: "bg-amber-50 text-amber-700",
+    picked_up: "bg-blue-50 text-blue-700",
+    in_transit: "bg-indigo-50 text-indigo-700",
+    reached_hub: "bg-indigo-50 text-indigo-700",
+    out_for_delivery: "bg-orange-50 text-orange-700",
+    delivered: "bg-emerald-50 text-emerald-700",
+    failed_delivery: "bg-rose-50 text-rose-700",
+    returned_to_origin: "bg-stone-100 text-stone-600",
+  };
 
   return (
+    <>
     <div className="grid gap-6 lg:grid-cols-[0.85fr_1.15fr]">
       <div className="surface-elevated p-5">
         <p className="text-[11px] uppercase tracking-[0.18em] text-brand-500">Select order</p>
@@ -436,9 +510,7 @@ function TrackingTab() {
                 onClick={() => setSelectedOrderId(order._id)}
                 className={cn(
                   "w-full rounded-[22px] p-4 text-left transition-all duration-300",
-                  isSelected
-                    ? "bg-brand-700 text-white"
-                    : "bg-brand-50/70 text-brand-900 hover:bg-brand-100/70",
+                  isSelected ? "bg-brand-700 text-white" : "bg-brand-50/70 text-brand-900 hover:bg-brand-100/70",
                 )}
               >
                 <p className="truncate font-mono text-xs">{order._id}</p>
@@ -446,18 +518,12 @@ function TrackingTab() {
                   <p className={cn("text-sm font-semibold", isSelected ? "text-white/80" : "text-stone-500")}>
                     {formatCurrency(order.totalAmount)}
                   </p>
-                  <span
-                    className={cn(
-                      "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em]",
-                      isSelected
-                        ? "bg-white/15 text-white"
-                        : order.paymentStatus === "paid"
-                          ? "bg-emerald-50 text-emerald-700"
-                          : order.paymentStatus === "failed"
-                            ? "bg-rose-50 text-rose-700"
-                            : "bg-brand-50 text-brand-700",
-                    )}
-                  >
+                  <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em]",
+                    isSelected ? "bg-white/15 text-white"
+                      : order.paymentStatus === "paid" ? "bg-emerald-50 text-emerald-700"
+                      : order.paymentStatus === "failed" ? "bg-rose-50 text-rose-700"
+                      : "bg-brand-50 text-brand-700",
+                  )}>
                     {order.paymentStatus}
                   </span>
                 </div>
@@ -468,18 +534,80 @@ function TrackingTab() {
       </div>
 
       <div className="surface-elevated p-6 sm:p-8">
-        <p className="text-[11px] uppercase tracking-[0.18em] text-brand-500">Tracking status</p>
-        <h3 className="mt-3 text-3xl font-semibold tracking-[-0.05em] text-brand-900">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[11px] uppercase tracking-[0.18em] text-brand-500">Shipment status</p>
+          {isLive && (
+            <div className="flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold text-emerald-700">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+              Live
+            </div>
+          )}
+        </div>
+        <h3 className="mt-2 text-3xl font-semibold tracking-[-0.05em] text-brand-900">
           {completedSteps === -1 ? "Order failed" : completedSteps === -2 ? "Order cancelled" : "Order progress"}
         </h3>
         <p className="mt-1 text-sm text-stone-500">{formatOrderDate(selectedOrder.createdAt)}</p>
 
+        {isLoadingShipments ? (
+          <div className="mt-4 space-y-2">
+            <div className="shimmer h-14 rounded-[20px] bg-brand-100" />
+          </div>
+        ) : mainShipment ? (
+          <div className="mt-5 space-y-3">
+            <div className="rounded-[20px] bg-brand-50/60 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-500">Courier</p>
+                  <p className="mt-0.5 font-semibold text-brand-900">{mainShipment.carrier ?? "Processing"}</p>
+                </div>
+                <span className={cn("rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em]", shipStatusColor[mainShipment.shipmentStatus] ?? "bg-brand-50 text-brand-700")}>
+                  {mainShipment.shipmentStatus.replace(/_/g, " ")}
+                </span>
+              </div>
+              {mainShipment.awbNumber && (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-brand-100/60 pt-3">
+                  <div>
+                    <p className="text-xs text-stone-400">AWB Number</p>
+                    <p className="font-mono text-sm font-semibold text-brand-900">{mainShipment.awbNumber}</p>
+                  </div>
+                  <Link
+                    href={`/track/${mainShipment.awbNumber}`}
+                    target="_blank"
+                    className={buttonStyles({ size: "sm" })}
+                  >
+                    Live Track →
+                  </Link>
+                </div>
+              )}
+              {mainShipment.shipmentStatus === "delivered" && (
+                <div className="mt-3 border-t border-brand-100/60 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowReturnModal(true)}
+                    className={buttonStyles({ variant: "secondary", size: "sm" })}
+                  >
+                    Request Return
+                  </button>
+                </div>
+              )}
+              {mainShipment.estimatedDeliveryDate && mainShipment.shipmentStatus !== "delivered" && (
+                <p className="mt-2 text-xs text-stone-500">
+                  Est. delivery:{" "}
+                  <span className="font-semibold text-brand-900">
+                    {new Date(mainShipment.estimatedDeliveryDate).toLocaleDateString("en-IN", {
+                      weekday: "short", day: "numeric", month: "short",
+                    })}
+                  </span>
+                </p>
+              )}
+            </div>
+          </div>
+        ) : null}
+
         {completedSteps === -1 ? (
           <div className="mt-6 rounded-[22px] bg-rose-50 p-5">
             <p className="font-semibold text-rose-700">Payment failed</p>
-            <p className="mt-1 text-sm text-rose-600">
-              The payment for this order was not completed or was declined. Please try again.
-            </p>
+            <p className="mt-1 text-sm text-rose-600">Payment was not completed or declined.</p>
             <Link href="/checkout" className={buttonStyles({ size: "sm", className: "mt-4 bg-rose-600 text-white hover:bg-rose-700" })}>
               Try again
             </Link>
@@ -487,9 +615,7 @@ function TrackingTab() {
         ) : completedSteps === -2 ? (
           <div className="mt-6 rounded-[22px] bg-stone-100 p-5">
             <p className="font-semibold text-stone-700">Order cancelled</p>
-            <p className="mt-1 text-sm text-stone-500">
-              This order was cancelled before payment was completed.
-            </p>
+            <p className="mt-1 text-sm text-stone-500">This order was cancelled before payment was completed.</p>
           </div>
         ) : (
           <div className="mt-8">
@@ -498,59 +624,28 @@ function TrackingTab() {
               const isActive = index === completedSteps;
               const isUpcoming = index > completedSteps;
               const isLast = index === TRACKING_STEPS.length - 1;
-
               return (
                 <div key={step.key} className="relative flex gap-4">
                   {!isLast && (
-                    <div
-                      className={cn(
-                        "absolute left-5 top-10 z-0 w-0.5",
-                        isCompleted ? "bg-brand-700" : "bg-brand-100",
-                      )}
-                      style={{ height: "calc(100% - 0px)" }}
-                    />
+                    <div className={cn("absolute left-5 top-10 z-0 w-0.5", isCompleted ? "bg-brand-700" : "bg-brand-100")} style={{ height: "calc(100% - 0px)" }} />
                   )}
-
-                  <div
-                    className={cn(
-                      "relative z-10 mt-0.5 grid h-10 w-10 flex-shrink-0 place-items-center rounded-full border-2 transition-all",
-                      isCompleted
-                        ? "border-brand-700 bg-brand-700 text-white"
-                        : isActive
-                          ? "border-brand-500 bg-white text-brand-700 shadow-sm"
-                          : "border-brand-100 bg-white text-stone-400",
-                    )}
-                  >
+                  <div className={cn("relative z-10 mt-0.5 grid h-10 w-10 flex-shrink-0 place-items-center rounded-full border-2 transition-all",
+                    isCompleted ? "border-brand-700 bg-brand-700 text-white"
+                      : isActive ? "border-brand-500 bg-white text-brand-700 shadow-sm"
+                      : "border-brand-100 bg-white text-stone-400",
+                  )}>
                     {isCompleted ? (
                       <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                        <path
-                          d="M2 7l4 4 6-8"
-                          stroke="currentColor"
-                          strokeWidth="2.2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
+                        <path d="M2 7l4 4 6-8" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                     ) : (
                       <span className="text-xs font-semibold">{index + 1}</span>
                     )}
                   </div>
-
                   <div className={cn("pb-8 pt-0.5", isUpcoming && "opacity-40")}>
                     <div className="flex items-center gap-2">
-                      <p
-                        className={cn(
-                          "font-semibold",
-                          isActive ? "text-brand-700" : "text-brand-900",
-                        )}
-                      >
-                        {step.label}
-                      </p>
-                      {isActive && (
-                        <span className="inline-flex rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-brand-700">
-                          Current
-                        </span>
-                      )}
+                      <p className={cn("font-semibold", isActive ? "text-brand-700" : "text-brand-900")}>{step.label}</p>
+                      {isActive && <span className="inline-flex rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-brand-700">Current</span>}
                     </div>
                     <p className="mt-0.5 text-sm text-stone-500">{step.description}</p>
                   </div>
@@ -561,8 +656,85 @@ function TrackingTab() {
         )}
       </div>
     </div>
+      <TrackingTabReturnModal
+        show={showReturnModal}
+        order={selectedOrder}
+        onClose={() => setShowReturnModal(false)}
+        onSuccess={() => setShowReturnModal(false)}
+      />
+    </>
   );
 }
+
+function TrackingTabReturnModal({
+  show, order, onClose, onSuccess
+}: {
+  show: boolean;
+  order: { _id: string } | null;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const { toast } = useToast();
+  const [reason, setReason] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  if (!show || !order) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-900/60 p-4 backdrop-blur-sm">
+      <div className="surface-elevated w-full max-w-md space-y-5 p-6">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xl font-semibold tracking-[-0.04em] text-brand-900">Request Return</h3>
+          <button type="button" onClick={onClose} className="rounded-full p-2 text-stone-400 hover:bg-brand-50">✕</button>
+        </div>
+        <p className="text-sm text-stone-500">
+          Order <span className="font-mono font-semibold text-brand-700">#{order._id.slice(-8)}</span>
+        </p>
+        <div>
+          <label className="block text-sm font-semibold text-brand-900">
+            Reason for return <span className="text-rose-500">*</span>
+          </label>
+          <textarea
+            rows={3}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Describe why you want to return this item…"
+            className="mt-2 w-full rounded-[14px] border border-brand-200 bg-white px-4 py-3 text-sm text-brand-900 placeholder-stone-400 focus:border-brand-500 focus:outline-none"
+          />
+        </div>
+        <div className="flex justify-end gap-3">
+          <button type="button" onClick={onClose} className={buttonStyles({ variant: "secondary", size: "sm" })}>Cancel</button>
+          <button
+            type="button"
+            disabled={!reason.trim() || isSaving}
+            onClick={async () => {
+              if (!reason.trim()) return;
+              setIsSaving(true);
+              try {
+                const res = await fetch("/api/returns", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ orderId: order._id, reason: reason.trim() }),
+                });
+                const data = (await res.json()) as { error?: string };
+                if (!res.ok) throw new Error(data.error);
+                toast({ variant: "success", title: "Return requested", description: "We'll review your request and get back to you." });
+                setReason("");
+                onSuccess();
+              } catch (e) {
+                toast({ variant: "error", title: "Failed", description: e instanceof Error ? e.message : "Unable to submit return." });
+              } finally {
+                setIsSaving(false);
+              }
+            }}
+            className={buttonStyles({ size: "sm" })}
+          >
+            {isSaving ? "Submitting…" : "Submit Return"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 function WishlistTab() {
   const { wishlist, toggle } = useWishlist();

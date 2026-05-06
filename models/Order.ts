@@ -7,7 +7,18 @@ const DeliveryAddressSchema = new Schema(
     addressLine: { type: String, required: true, trim: true },
     area: { type: String, trim: true },
     city: { type: String, required: true, trim: true },
+    state: { type: String, trim: true },
     pincode: { type: String, trim: true },
+  },
+  { _id: false },
+);
+
+const OrderTimelineSchema = new Schema(
+  {
+    status: { type: String, required: true },
+    description: { type: String, required: true },
+    timestamp: { type: Date, default: Date.now },
+    actor: { type: String },
   },
   { _id: false },
 );
@@ -87,9 +98,36 @@ const OrderSchema = new Schema(
       default: "created",
       required: true,
     },
+    paymentMode: {
+      type: String,
+      enum: ["prepaid", "cod"],
+      default: "prepaid",
+    },
+    codAmount: {
+      type: Number,
+      default: 0,
+    },
+    codCollected: {
+      type: Boolean,
+      default: false,
+    },
     fulfillmentStatus: {
       type: String,
-      enum: ["pending", "processing", "shipped", "delivered", "cancelled", "refund_requested"],
+      enum: [
+        "pending",
+        "confirmed",
+        "processing",
+        "packed",
+        "shipped",
+        "out_for_delivery",
+        "delivered",
+        "cancelled",
+        "return_requested",
+        "returned",
+        "refunded",
+        "rto",
+        "refund_requested",
+      ],
     },
     razorpayOrderId: {
       type: String,
@@ -113,6 +151,27 @@ const OrderSchema = new Schema(
     discountAmount: {
       type: Number,
       default: 0,
+    },
+    subtotal: {
+      type: Number,
+      default: 0,
+    },
+    shippingCharge: {
+      type: Number,
+      default: 0,
+    },
+    tax: {
+      type: Number,
+      default: 0,
+    },
+    shipmentIds: {
+      type: [String],
+      default: [],
+      index: true,
+    },
+    timeline: {
+      type: [OrderTimelineSchema],
+      default: [],
     },
     items: {
       type: [OrderItemSchema],

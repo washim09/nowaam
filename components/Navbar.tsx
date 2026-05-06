@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { buttonStyles } from "@/components/Button";
 import { CartIcon, ProfileIcon, SearchIcon } from "@/components/Icons";
+import { NotificationBell } from "@/components/NotificationBell";
 import { useCart } from "@/hooks/use-cart";
 import { cn } from "@/lib/utils";
 
@@ -179,8 +180,8 @@ export function Navbar() {
     <header className="sticky top-0 z-40 pt-3">
       <div className="section-shell">
         <div className="surface-panel px-4 py-3 sm:px-5">
-          <div className="flex items-center justify-between gap-3">
-            <Link href="/" className="flex min-w-0 flex-1 items-center gap-3">
+          <div className="flex items-center gap-3">
+            <Link href="/" className="flex min-w-0 items-center gap-3">
               <div className="grid h-11 w-11 flex-shrink-0 place-items-center rounded-2xl bg-brand-700 text-lg font-semibold text-white shadow-sm">
                 N
               </div>
@@ -194,7 +195,30 @@ export function Navbar() {
               </div>
             </Link>
 
-            <div className="flex flex-shrink-0 items-center gap-2">
+            <nav className="hidden flex-1 items-center justify-center gap-1 md:flex">
+              <div className="flex items-center gap-1 rounded-full bg-brand-50/80 p-1">
+                {links.map((link) => {
+                  const isActive =
+                    link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);
+                  return (
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      className={cn(
+                        "rounded-full px-4 py-2 text-sm font-medium transition-all duration-300",
+                        isActive
+                          ? "bg-white text-brand-900 shadow-sm"
+                          : "text-brand-600 hover:bg-white/70 hover:text-brand-900",
+                      )}
+                    >
+                      {link.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            </nav>
+
+            <div className="ml-auto flex flex-shrink-0 items-center gap-2">
               <Link href="/products" aria-label="Search products" className="icon-button">
                 <SearchIcon />
               </Link>
@@ -204,31 +228,10 @@ export function Navbar() {
                   {isHydrated ? totalItems : 0}
                 </span>
               </Link>
+              {session?.user && <NotificationBell />}
               <AccountDropdown />
             </div>
           </div>
-
-          <nav className="mt-3 hidden items-center gap-1 rounded-full bg-brand-50/80 p-1 md:flex">
-            {links.map((link) => {
-              const isActive =
-                link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);
-
-              return (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className={cn(
-                    "rounded-full px-4 py-2 text-sm font-medium transition-all duration-300",
-                    isActive
-                      ? "bg-white text-brand-900 shadow-sm"
-                      : "text-brand-600 hover:bg-white/70 hover:text-brand-900",
-                  )}
-                >
-                  {link.label}
-                </Link>
-              );
-            })}
-          </nav>
         </div>
 
         <nav className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 md:hidden">

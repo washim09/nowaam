@@ -5,22 +5,30 @@ import { signOut, useSession } from "next-auth/react";
 import { useEffect, useRef, useState } from "react";
 
 import { buttonStyles } from "@/components/Button";
+import { SellerShipmentsTab } from "@/components/SellerShipmentsTab";
 import { useToast } from "@/components/ToastProvider";
 import { PRODUCT_CATEGORIES } from "@/lib/constants";
 import { getManufacturerName, getProductCategory } from "@/lib/catalog";
 import { cn, formatCurrency, getFriendlyErrorMessage } from "@/lib/utils";
 import type { FulfillmentStatus, OrderRecord, ProductRecord } from "@/types";
 
-type SellerTab = "listings" | "orders" | "analytics";
+type SellerTab = "listings" | "orders" | "shipments" | "analytics";
 
 function fulfillmentBadge(status?: FulfillmentStatus) {
   if (!status) return null;
   const styles: Record<FulfillmentStatus, string> = {
     pending: "bg-brand-50 text-brand-700",
+    confirmed: "bg-sky-50 text-sky-700",
     processing: "bg-amber-50 text-amber-700",
+    packed: "bg-amber-50 text-amber-700",
     shipped: "bg-sky-50 text-sky-700",
+    out_for_delivery: "bg-orange-50 text-orange-700",
     delivered: "bg-emerald-50 text-emerald-700",
     cancelled: "bg-stone-100 text-stone-600",
+    return_requested: "bg-rose-50 text-rose-700",
+    returned: "bg-stone-100 text-stone-600",
+    refunded: "bg-indigo-50 text-indigo-700",
+    rto: "bg-stone-100 text-stone-600",
     refund_requested: "bg-rose-50 text-rose-700",
   };
   return (
@@ -475,10 +483,28 @@ function OrdersTab({
 function AnalyticsTab({
   products,
   orders,
+  sellerId,
 }: {
   products: ProductRecord[];
   orders: OrderRecord[];
+  sellerId: string;
 }) {
+  const [shipmentStats, setShipmentStats] = useState<{ total: number; delivered: number; inTransit: number; rto: number } | null>(null);
+  useEffect(() => {
+    if (!sellerId) return;
+    void fetch(`/api/shipments?sellerId=${sellerId}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d: { shipments?: { shipmentStatus: string }[] }) => {
+        const s = d.shipments ?? [];
+        setShipmentStats({
+          total: s.length,
+          delivered: s.filter((x) => x.shipmentStatus === "delivered").length,
+          inTransit: s.filter((x) => ["in_transit", "out_for_delivery", "picked_up"].includes(x.shipmentStatus)).length,
+          rto: s.filter((x) => x.shipmentStatus === "returned_to_origin").length,
+        });
+      })
+      .catch(() => null);
+  }, [sellerId]);
   const paidOrders = orders.filter((o) => o.paymentStatus === "paid");
   const totalRevenue = paidOrders.reduce((sum, o) => sum + o.totalAmount, 0);
   const pendingOrders = orders.filter((o) => o.paymentStatus === "created").length;
@@ -527,6 +553,30 @@ function AnalyticsTab({
           </div>
         ))}
       </div>
+
+      {shipmentStats && (
+        <div className="surface-elevated p-6">
+          <h3 className="text-xl font-semibold tracking-[-0.04em] text-brand-900">Shipment overview</h3>
+          <div className="mt-4 grid gap-4 sm:grid-cols-4">
+            {[
+              { label: "Total shipments", value: shipmentStats.total, color: "text-brand-900" },
+              { label: "In transit", value: shipmentStats.inTransit, color: "text-indigo-700" },
+              { label: "Delivered", value: shipmentStats.delivered, color: "text-emerald-700" },
+              { label: "RTO", value: shipmentStats.rto, color: "text-rose-700" },
+            ].map((s) => (
+              <div key={s.label} className="rounded-[18px] bg-brand-50/60 p-4">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-brand-500">{s.label}</p>
+                <p className={cn("mt-2 text-3xl font-semibold tracking-[-0.05em]", s.color)}>{s.value}</p>
+                {shipmentStats.total > 0 && s.label !== "Total shipments" && (
+                  <p className="mt-1 text-xs text-stone-400">
+                    {Math.round((s.value / shipmentStats.total) * 100)}%
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="surface-elevated overflow-hidden">
         <div className="border-b border-brand-100/60 px-6 py-4">
@@ -601,6 +651,7 @@ export function SellerDashboardClient() {
   const SELLER_TABS: Array<{ id: SellerTab; label: string; count?: number }> = [
     { id: "listings", label: "Listings", count: products.length || undefined },
     { id: "orders", label: "Orders", count: orders.length || undefined },
+    { id: "shipments", label: "Shipments" },
     { id: "analytics", label: "Analytics" },
   ];
 
@@ -678,8 +729,11 @@ export function SellerDashboardClient() {
           onOrdersChange={setOrders}
         />
       )}
+      {activeTab === "shipments" && sellerId && (
+        <SellerShipmentsTab sellerId={sellerId} />
+      )}
       {activeTab === "analytics" && (
-        <AnalyticsTab products={products} orders={orders} />
+        <AnalyticsTab products={products} orders={orders} sellerId={sellerId} />
       )}
     </div>
   );

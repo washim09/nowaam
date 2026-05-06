@@ -4,12 +4,13 @@ import { signOut, useSession } from "next-auth/react";
 import { useEffect, useMemo, useState } from "react";
 
 import { buttonStyles } from "@/components/Button";
+import { AdminLogisticsPanel } from "@/components/AdminLogisticsPanel";
 import { useToast } from "@/components/ToastProvider";
 import { PRODUCT_CATEGORIES } from "@/lib/constants";
 import { cn, formatCurrency, getFriendlyErrorMessage } from "@/lib/utils";
 import type { FulfillmentStatus, OrderRecord, ProductRecord } from "@/types";
 
-type AdminTab = "overview" | "users" | "products" | "analytics";
+type AdminTab = "overview" | "users" | "products" | "analytics" | "logistics";
 
 type UserRecord = {
   _id: string;
@@ -738,6 +739,7 @@ export function SuperAdminClient() {
     },
     { id: "products", label: "Products", count: products.length || undefined },
     { id: "analytics", label: "Analytics" },
+    { id: "logistics", label: "Logistics" },
   ];
 
   return (
@@ -822,6 +824,7 @@ export function SuperAdminClient() {
       {activeTab === "analytics" && (
         <AnalyticsTab orders={orders} products={products} users={users} />
       )}
+      {activeTab === "logistics" && <AdminLogisticsPanel />}
     </div>
   );
 }
