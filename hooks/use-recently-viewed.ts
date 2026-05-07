@@ -6,36 +6,41 @@ import { RECENTLY_VIEWED_STORAGE_KEY } from "@/lib/constants";
 
 const MAX_RECENTLY_VIEWED = 10;
 
-function readRecentlyViewed(): string[] {
+function storageKey(userId?: string): string {
+  return userId ? `${RECENTLY_VIEWED_STORAGE_KEY}-${userId}` : RECENTLY_VIEWED_STORAGE_KEY;
+}
+
+function readRecentlyViewed(userId?: string): string[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem(RECENTLY_VIEWED_STORAGE_KEY);
+    const raw = window.localStorage.getItem(storageKey(userId));
     return raw ? (JSON.parse(raw) as string[]) : [];
   } catch {
     return [];
   }
 }
 
-export function addToRecentlyViewed(productId: string) {
+export function addToRecentlyViewed(productId: string, userId?: string) {
   if (typeof window === "undefined") return;
-  const existing = readRecentlyViewed().filter((id) => id !== productId);
+  const key = storageKey(userId);
+  const existing = readRecentlyViewed(userId).filter((id) => id !== productId);
   const updated = [productId, ...existing].slice(0, MAX_RECENTLY_VIEWED);
-  window.localStorage.setItem(RECENTLY_VIEWED_STORAGE_KEY, JSON.stringify(updated));
+  window.localStorage.setItem(key, JSON.stringify(updated));
 }
 
-export function useRecentlyViewed() {
+export function useRecentlyViewed(userId?: string) {
   const [ids, setIds] = useState<string[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
 
   useEffect(() => {
-    setIds(readRecentlyViewed());
+    setIds(readRecentlyViewed(userId));
     setIsHydrated(true);
-  }, []);
+  }, [userId]);
 
   const clear = useCallback(() => {
-    window.localStorage.removeItem(RECENTLY_VIEWED_STORAGE_KEY);
+    window.localStorage.removeItem(storageKey(userId));
     setIds([]);
-  }, []);
+  }, [userId]);
 
   return { ids, isHydrated, clear };
 }

@@ -269,7 +269,8 @@ function ProfileTab() {
 }
 
 function OrdersTab() {
-  const { orders, isLoading, isHydrated } = useOrderHistory();
+  const { data: session } = useSession();
+  const { orders, isLoading, isHydrated } = useOrderHistory(session?.user?.id);
   const { toast } = useToast();
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [localOrders, setLocalOrders] = useState<OrderRecord[]>([]);
@@ -410,7 +411,8 @@ type ShipmentSummary = {
 };
 
 function TrackingTab() {
-  const { orders, isLoading, isHydrated } = useOrderHistory();
+  const { data: session } = useSession();
+  const { orders, isLoading, isHydrated } = useOrderHistory(session?.user?.id);
   const [selectedOrderId, setSelectedOrderId] = useState<string>("");
   const [shipments, setShipments] = useState<ShipmentSummary[]>([]);
   const [isLoadingShipments, setIsLoadingShipments] = useState(false);
@@ -1090,7 +1092,8 @@ function AddressesTab() {
 }
 
 function RecentlyViewedTab() {
-  const { ids, isHydrated, clear } = useRecentlyViewed();
+  const { data: session } = useSession();
+  const { ids, isHydrated, clear } = useRecentlyViewed(session?.user?.id);
   const { addItem } = useCart();
   const { toast } = useToast();
   const [products, setProducts] = useState<ProductRecord[]>([]);
@@ -1441,7 +1444,7 @@ function StarRating({ value, onChange }: { value: number; onChange?: (v: number)
 
 function ReviewsTab() {
   const { data: session } = useSession();
-  const { orders, isHydrated, isLoading } = useOrderHistory();
+  const { orders, isHydrated, isLoading } = useOrderHistory(session?.user?.id);
   const { profile } = useProfile(session?.user?.id);
   const { toast } = useToast();
   const [existingReviews, setExistingReviews] = useState<ReviewRecord[]>([]);
@@ -1595,10 +1598,11 @@ function ReviewsTab() {
 }
 
 export function BuyerAccountClient() {
+  const { data: session } = useSession();
   const [activeTab, setActiveTab] = useState<Tab>("profile");
-  const { orders } = useOrderHistory();
+  const { orders } = useOrderHistory(session?.user?.id);
   const { wishlist } = useWishlist();
-  const { ids: recentIds } = useRecentlyViewed();
+  const { ids: recentIds } = useRecentlyViewed(session?.user?.id);
 
   const tabCounts: Partial<Record<Tab, number>> = {
     orders: orders.length || undefined,

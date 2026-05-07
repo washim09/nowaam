@@ -206,7 +206,7 @@ export function CheckoutClient() {
               throw new Error(verifyData.error || "Payment verification failed.");
             }
 
-            addOrderToHistory(data.internalOrderId);
+            addOrderToHistory(data.internalOrderId, session?.user?.id ?? "");
             clearCart();
             setSuccessOrderId(data.internalOrderId);
             toast({

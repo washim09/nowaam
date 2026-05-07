@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 
 import { buttonStyles } from "@/components/Button";
@@ -22,10 +23,11 @@ export function ProductDetailClient({ product }: { product: ProductRecord }) {
   const allImages = product.images?.length ? product.images : (product.image ? [product.image] : []);
   const { addItem } = useCart();
   const { toast } = useToast();
+  const { data: session } = useSession();
 
   useEffect(() => {
-    addToRecentlyViewed(product._id);
-  }, [product._id]);
+    addToRecentlyViewed(product._id, session?.user?.id);
+  }, [product._id, session?.user?.id]);
 
   const hasVariants = (product.variants?.length ?? 0) > 0;
 
