@@ -18,27 +18,33 @@ const defaultProfile: BuyerProfile = {
   preferredCity: "",
 };
 
-function readProfile(): BuyerProfile {
+function storageKey(userId: string): string {
+  return `${PROFILE_STORAGE_KEY}-${userId}`;
+}
+
+function readProfile(userId: string): BuyerProfile {
   if (typeof window === "undefined") return defaultProfile;
   try {
-    const raw = window.localStorage.getItem(PROFILE_STORAGE_KEY);
+    const raw = window.localStorage.getItem(storageKey(userId));
     return raw ? (JSON.parse(raw) as BuyerProfile) : defaultProfile;
   } catch {
     return defaultProfile;
   }
 }
 
-export function useProfile() {
+export function useProfile(userId?: string) {
   const [profile, setProfile] = useState<BuyerProfile>(defaultProfile);
   const [isHydrated, setIsHydrated] = useState(false);
 
   useEffect(() => {
-    setProfile(readProfile());
+    if (!userId) return;
+    setProfile(readProfile(userId));
     setIsHydrated(true);
-  }, []);
+  }, [userId]);
 
   const saveProfile = (data: BuyerProfile) => {
-    window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(data));
+    if (!userId) return;
+    window.localStorage.setItem(storageKey(userId), JSON.stringify(data));
     setProfile(data);
   };
 

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { useEffect, useRef, useState } from "react";
 
 import { buttonStyles } from "@/components/Button";
@@ -139,7 +140,9 @@ function OrdersSkeleton() {
 }
 
 function ProfileTab() {
-  const { profile, isHydrated, saveProfile } = useProfile();
+  const { data: session } = useSession();
+  const userId = session?.user?.id;
+  const { profile, isHydrated, saveProfile } = useProfile(userId);
   const { toast } = useToast();
   const [form, setForm] = useState<BuyerProfile>({
     fullName: "",
@@ -162,7 +165,7 @@ function ProfileTab() {
     });
   };
 
-  if (!isHydrated) return <ProfileSkeleton />;
+  if (!userId || !isHydrated) return <ProfileSkeleton />;
 
   const initials = form.fullName
     ? form.fullName
@@ -1437,8 +1440,9 @@ function StarRating({ value, onChange }: { value: number; onChange?: (v: number)
 }
 
 function ReviewsTab() {
+  const { data: session } = useSession();
   const { orders, isHydrated, isLoading } = useOrderHistory();
-  const { profile } = useProfile();
+  const { profile } = useProfile(session?.user?.id);
   const { toast } = useToast();
   const [existingReviews, setExistingReviews] = useState<ReviewRecord[]>([]);
   const [submitting, setSubmitting] = useState<string | null>(null);
