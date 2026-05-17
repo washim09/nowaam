@@ -3,7 +3,11 @@ import { NextResponse } from "next/server";
 
 import { auth } from "@/auth";
 import { connectToDatabase } from "@/lib/db";
+import { createNotification, NotificationTemplates } from "@/lib/notifications";
+import { sendShipmentCreatedEmail, sendDeliveredEmail } from "@/lib/shipping-emails";
 import Order from "@/models/Order";
+import Shipment from "@/models/Shipment";
+import User from "@/models/User";
 
 export const runtime = "nodejs";
 
@@ -96,6 +100,87 @@ export async function PATCH(
 
     if (!updated) {
       return NextResponse.json({ error: "Order not found." }, { status: 404 });
+    }
+
+    const orderIdStr = String(id);
+    const buyerIdStr = existing.buyerId ? String(existing.buyerId) : null;
+
+    if (body.fulfillmentStatus === "shipped") {
+      const sellerId = session.user.id;
+      const existingShipment = await Shipment.findOne({ orderId: id, sellerId });
+
+      if (!existingShipment) {
+        const addr = existing.deliveryAddress;
+        await Shipment.create({
+          orderId: id,
+          sellerId,
+          shipmentStatus: "in_transit",
+          deliveryAddress: addr
+            ? {
+                fullName: addr.fullName,
+                phone: addr.phone,
+                addressLine: addr.addressLine,
+                area: addr.area,
+                city: addr.city,
+                state: addr.state,
+                pincode: addr.pincode,
+              }
+            : undefined,
+          timeline: [{
+            status: "in_transit",
+            description: "Order marked as shipped by seller",
+            timestamp: new Date(),
+          }],
+        });
+      } else if (["shipment_created", "awb_assigned", "pickup_scheduled", "picked_up"].includes(existingShipment.shipmentStatus)) {
+        await Shipment.findByIdAndUpdate(existingShipment._id, {
+          $set: { shipmentStatus: "in_transit" },
+          $push: { timeline: { status: "in_transit", description: "Order marked as shipped by seller", timestamp: new Date() } },
+        });
+      }
+
+      if (buyerIdStr) {
+        void createNotification({
+          userId: buyerIdStr,
+          ...NotificationTemplates.shipmentCreated(orderIdStr, "—", "Seller"),
+        });
+        const buyer = await User.findById(buyerIdStr).select("email name").lean();
+        if (buyer?.email) {
+          void sendShipmentCreatedEmail({
+            to: buyer.email,
+            buyerName: buyer.name || existing.deliveryAddress?.fullName || "Customer",
+            orderId: orderIdStr,
+            awb: "—",
+            carrier: "Seller Dispatch",
+            trackingUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/account`,
+          }).catch(() => null);
+        }
+      }
+    }
+
+    if (body.fulfillmentStatus === "delivered") {
+      await Shipment.findOneAndUpdate(
+        { orderId: id },
+        {
+          $set: { shipmentStatus: "delivered" },
+          $push: { timeline: { status: "delivered", description: "Order delivered to buyer", timestamp: new Date() } },
+        },
+      );
+
+      if (buyerIdStr) {
+        void createNotification({
+          userId: buyerIdStr,
+          ...NotificationTemplates.delivered(orderIdStr),
+        });
+        const buyer = await User.findById(buyerIdStr).select("email name").lean();
+        if (buyer?.email) {
+          void sendDeliveredEmail({
+            to: buyer.email,
+            buyerName: buyer.name || existing.deliveryAddress?.fullName || "Customer",
+            orderId: orderIdStr,
+          }).catch(() => null);
+        }
+      }
     }
 
     return NextResponse.json({ order: JSON.parse(JSON.stringify(updated)) });

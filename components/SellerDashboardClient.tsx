@@ -631,10 +631,11 @@ export function SellerDashboardClient() {
     }
   };
 
-  const loadOrders = async () => {
+  const loadOrders = async (sid: string) => {
+    if (!sid) return;
     setIsLoadingOrders(true);
     try {
-      const res = await fetch("/api/orders", { cache: "no-store" });
+      const res = await fetch(`/api/orders?sellerId=${sid}`, { cache: "no-store" });
       const data = (await res.json()) as { error?: string; orders?: OrderRecord[] };
       if (res.ok && data.orders) setOrders(data.orders);
     } finally {
@@ -643,10 +644,12 @@ export function SellerDashboardClient() {
   };
 
   useEffect(() => {
-    if (status === "authenticated" && sellerId) void loadProducts(sellerId);
+    if (status === "authenticated" && sellerId) {
+      void loadProducts(sellerId);
+      void loadOrders(sellerId);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, sellerId]);
-  useEffect(() => { void loadOrders(); }, []);
 
   const SELLER_TABS: Array<{ id: SellerTab; label: string; count?: number }> = [
     { id: "listings", label: "Listings", count: products.length || undefined },

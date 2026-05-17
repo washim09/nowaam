@@ -9,6 +9,7 @@ import { buttonStyles } from "@/components/Button";
 import { CartIcon, ProfileIcon, SearchIcon } from "@/components/Icons";
 import { NotificationBell } from "@/components/NotificationBell";
 import { useCart } from "@/hooks/use-cart";
+import { CART_STORAGE_KEY } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 function getNavLinks(role: string | undefined) {
@@ -28,6 +29,7 @@ function getNavLinks(role: string | undefined) {
 function AccountDropdown() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const { clearCart } = useCart();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -45,9 +47,12 @@ function AccountDropdown() {
 
   const handleSignOut = async () => {
     close();
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(CART_STORAGE_KEY);
+      window.dispatchEvent(new Event("cart-updated"));
+    }
     await signOut({ redirect: false });
     router.push("/");
-    router.refresh();
   };
 
   const user = session?.user;

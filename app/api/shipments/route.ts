@@ -8,6 +8,7 @@ import { sendShipmentCreatedEmail } from "@/lib/shipping-emails";
 import { sendSms, SMS_TEMPLATES } from "@/lib/sms";
 import { ShippingService } from "@/lib/shipping/ShippingService";
 import type { CreateShipmentParams } from "@/lib/shipping/interfaces/ShippingProvider";
+import type { FulfillmentStatus } from "@/types";
 import Order from "@/models/Order";
 import Shipment from "@/models/Shipment";
 import TrackingEvent from "@/models/TrackingEvent";
@@ -41,6 +42,48 @@ export async function GET(request: NextRequest) {
     if (status) filter.shipmentStatus = status;
 
     const shipments = await Shipment.find(filter).sort({ createdAt: -1 }).limit(200).lean();
+
+    if (session.user.role === "seller") {
+      const fulfillmentToShipmentStatus: Partial<Record<FulfillmentStatus, string>> = {
+        shipped: "in_transit",
+        out_for_delivery: "out_for_delivery",
+        delivered: "delivered",
+      };
+      const existingOrderIds = new Set(shipments.map((s) => String(s.orderId)));
+      const shippedOrders = await Order.find({
+        "items.sellerId": session.user.id,
+        fulfillmentStatus: { $in: Object.keys(fulfillmentToShipmentStatus) },
+      }).lean();
+      const needsBackfill = shippedOrders.filter((o) => !existingOrderIds.has(String(o._id)));
+      if (needsBackfill.length > 0) {
+        await Promise.all(
+          needsBackfill.map((order) => {
+            const shipStatus =
+              fulfillmentToShipmentStatus[order.fulfillmentStatus as FulfillmentStatus] ??
+              "in_transit";
+            return Shipment.findOneAndUpdate(
+              { orderId: order._id, sellerId: session.user.id },
+              {
+                $setOnInsert: {
+                  orderId: order._id,
+                  sellerId: session.user.id,
+                  shipmentStatus: shipStatus,
+                  deliveryAddress: order.deliveryAddress,
+                  timeline: [{
+                    status: shipStatus,
+                    description: `Order marked as ${order.fulfillmentStatus ?? "shipped"} by seller`,
+                    timestamp: new Date(),
+                  }],
+                },
+              },
+              { upsert: true, new: true },
+            ).lean();
+          }),
+        );
+        const updated = await Shipment.find(filter).sort({ createdAt: -1 }).limit(200).lean();
+        return NextResponse.json({ shipments: JSON.parse(JSON.stringify(updated)) });
+      }
+    }
 
     return NextResponse.json({ shipments: JSON.parse(JSON.stringify(shipments)) });
   } catch (error) {

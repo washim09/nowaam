@@ -29,7 +29,19 @@ export async function GET(request: NextRequest) {
       }
       filter.buyerId = session.user.id;
     } else if (sellerParam) {
+      if (!session?.user?.id) {
+        return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+      }
+      if (session.user.id !== sellerParam && session.user.role !== "admin") {
+        return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+      }
       filter["items.sellerId"] = sellerParam;
+    } else {
+      if (session?.user?.role === "admin") {
+        // admin with no params gets all orders — intentional
+      } else {
+        return NextResponse.json({ error: "Missing query parameter." }, { status: 400 });
+      }
     }
 
     const orders = await Order.find(filter).sort({ createdAt: -1 }).limit(500).lean();
