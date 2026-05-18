@@ -5,6 +5,7 @@ import { signOut, useSession } from "next-auth/react";
 import { useEffect, useRef, useState } from "react";
 
 import { buttonStyles } from "@/components/Button";
+import { SellerReturnsTab } from "@/components/SellerReturnsTab";
 import { SellerShipmentsTab } from "@/components/SellerShipmentsTab";
 import { useToast } from "@/components/ToastProvider";
 import { PRODUCT_CATEGORIES } from "@/lib/constants";
@@ -12,7 +13,7 @@ import { getManufacturerName, getProductCategory } from "@/lib/catalog";
 import { cn, formatCurrency, getFriendlyErrorMessage } from "@/lib/utils";
 import type { FulfillmentStatus, OrderRecord, ProductRecord } from "@/types";
 
-type SellerTab = "listings" | "orders" | "shipments" | "analytics";
+type SellerTab = "listings" | "orders" | "shipments" | "returns" | "analytics";
 
 function fulfillmentBadge(status?: FulfillmentStatus) {
   if (!status) return null;
@@ -457,7 +458,12 @@ function OrdersTab({
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-brand-100/60 pt-4">
                 <p className="text-2xl font-semibold tracking-[-0.04em] text-brand-900">{formatCurrency(order.totalAmount)}</p>
                 <div className="flex flex-wrap gap-2">
-                  {order.paymentStatus === "paid" && !order.fulfillmentStatus && (
+                  {order.paymentStatus === "paid" && (!order.fulfillmentStatus || order.fulfillmentStatus === "pending" || order.fulfillmentStatus === "confirmed" || order.fulfillmentStatus === "processing") && (
+                    <button type="button" disabled={updatingId === order._id} onClick={() => updateFulfillment(order._id, "packed")} className={buttonStyles({ variant: "secondary", size: "sm" })}>
+                      {updatingId === order._id ? "Updating…" : "Mark as Packed"}
+                    </button>
+                  )}
+                  {order.paymentStatus === "paid" && (!order.fulfillmentStatus || order.fulfillmentStatus === "pending" || order.fulfillmentStatus === "confirmed" || order.fulfillmentStatus === "processing" || order.fulfillmentStatus === "packed") && (
                     <button type="button" disabled={updatingId === order._id} onClick={() => updateFulfillment(order._id, "shipped")} className={buttonStyles({ size: "sm" })}>
                       {updatingId === order._id ? "Updating…" : "Mark as Shipped"}
                     </button>
@@ -655,6 +661,7 @@ export function SellerDashboardClient() {
     { id: "listings", label: "Listings", count: products.length || undefined },
     { id: "orders", label: "Orders", count: orders.length || undefined },
     { id: "shipments", label: "Shipments" },
+    { id: "returns", label: "Returns" },
     { id: "analytics", label: "Analytics" },
   ];
 
@@ -735,6 +742,7 @@ export function SellerDashboardClient() {
       {activeTab === "shipments" && sellerId && (
         <SellerShipmentsTab sellerId={sellerId} />
       )}
+      {activeTab === "returns" && <SellerReturnsTab />}
       {activeTab === "analytics" && (
         <AnalyticsTab products={products} orders={orders} sellerId={sellerId} />
       )}

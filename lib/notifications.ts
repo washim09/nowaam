@@ -43,6 +43,13 @@ export const NotificationTemplates = {
     metadata: { orderId, amount: String(amount) },
   }),
 
+  orderPacked: (orderId: string) => ({
+    type: "order_packed",
+    title: "Order Packed",
+    message: `Your order ${orderId.slice(-8)} has been packed and is ready to ship.`,
+    metadata: { orderId },
+  }),
+
   shipmentCreated: (orderId: string, awb: string, carrier: string) => ({
     type: "shipment_created",
     title: "Order Shipped",

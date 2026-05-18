@@ -5,6 +5,7 @@ import { auth } from "@/auth";
 import { connectToDatabase } from "@/lib/db";
 import { createNotification, NotificationTemplates } from "@/lib/notifications";
 import { sendShipmentCreatedEmail, sendDeliveredEmail } from "@/lib/shipping-emails";
+import { sendSms, SMS_TEMPLATES } from "@/lib/sms";
 import Order from "@/models/Order";
 import Shipment from "@/models/Shipment";
 import User from "@/models/User";
@@ -104,6 +105,14 @@ export async function PATCH(
 
     const orderIdStr = String(id);
     const buyerIdStr = existing.buyerId ? String(existing.buyerId) : null;
+    const buyerPhone = existing.deliveryAddress?.phone;
+
+    if (body.fulfillmentStatus === "packed" && buyerIdStr) {
+      void createNotification({
+        userId: buyerIdStr,
+        ...NotificationTemplates.orderPacked(orderIdStr),
+      });
+    }
 
     if (body.fulfillmentStatus === "shipped") {
       const sellerId = session.user.id;
@@ -155,6 +164,12 @@ export async function PATCH(
             trackingUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/account`,
           }).catch(() => null);
         }
+        if (buyerPhone) {
+          void sendSms({
+            phone: buyerPhone,
+            message: SMS_TEMPLATES.shipmentCreated(orderIdStr.slice(-8), "Seller Dispatch"),
+          }).catch(() => null);
+        }
       }
     }
 
@@ -178,6 +193,12 @@ export async function PATCH(
             to: buyer.email,
             buyerName: buyer.name || existing.deliveryAddress?.fullName || "Customer",
             orderId: orderIdStr,
+          }).catch(() => null);
+        }
+        if (buyerPhone) {
+          void sendSms({
+            phone: buyerPhone,
+            message: SMS_TEMPLATES.delivered(orderIdStr),
           }).catch(() => null);
         }
       }

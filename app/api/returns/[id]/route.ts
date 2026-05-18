@@ -67,6 +67,14 @@ export async function PATCH(request: NextRequest, ctx: RouteContext) {
     const ret = await Return.findById(id);
     if (!ret) return NextResponse.json({ error: "Return not found." }, { status: 404 });
 
+    if (
+      session.user.role === "seller" &&
+      ret.sellerId &&
+      String(ret.sellerId) !== session.user.id
+    ) {
+      return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+    }
+
     const body = (await request.json()) as PatchBody;
     const updates: Record<string, unknown> = {};
 

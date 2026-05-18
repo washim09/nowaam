@@ -19,7 +19,7 @@ export async function sendEmail({ to, subject, html }: SendEmailOptions): Promis
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from: process.env.EMAIL_FROM ?? "Nowaam Marketplace <no-reply@nowaam.com>",
+      from: process.env.EMAIL_FROM ?? "Nowaam <no-reply@nowaam.com>",
       to,
       subject,
       html,
