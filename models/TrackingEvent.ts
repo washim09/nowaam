@@ -34,7 +34,7 @@ const TrackingEventSchema = new Schema(
     },
     source: {
       type: String,
-      enum: ["easypost", "manual", "webhook"],
+      enum: ["easypost", "shiprocket", "manual", "webhook", "cron"],
       default: "manual",
     },
     rawPayload: {

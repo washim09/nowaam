@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import { buttonStyles } from "@/components/Button";
+import { SellerShippingSettings } from "@/components/SellerShippingSettings";
 import { useToast } from "@/components/ToastProvider";
 import { COURIER_PARTNER, SHIPMENT_TIMELINE_LABELS } from "@/lib/constants";
 import { cn, formatCurrency, getFriendlyErrorMessage } from "@/lib/utils";
@@ -309,6 +310,8 @@ export function SellerShipmentsTab({ sellerId }: { sellerId: string }) {
 
   return (
     <div className="space-y-6">
+      <SellerShippingSettings />
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {[
           { label: "Total Shipments", value: stats.total, dark: false },

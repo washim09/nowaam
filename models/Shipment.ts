@@ -50,6 +50,23 @@ const ShipmentSchema = new Schema(
       type: String,
       trim: true,
     },
+    providerName: {
+      type: String,
+      enum: ["shiprocket", "easypost", "mock", "manual"],
+      default: "manual",
+      index: true,
+    },
+    providerShipmentId: {
+      type: String,
+      trim: true,
+      sparse: true,
+      index: true,
+    },
+    providerOrderId: {
+      type: String,
+      trim: true,
+      sparse: true,
+    },
     easypostShipmentId: {
       type: String,
       trim: true,
@@ -59,6 +76,9 @@ const ShipmentSchema = new Schema(
       type: String,
       trim: true,
       sparse: true,
+    },
+    lastSyncedAt: {
+      type: Date,
     },
     awbNumber: {
       type: String,

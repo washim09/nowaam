@@ -214,6 +214,42 @@ export type ReturnRecord = {
   updatedAt?: string;
 };
 
+// ─── Seller Shipping Preferences ─────────────────────────────────────────────
+
+export type SellerPickupAddress = {
+  contactPerson: string;
+  email: string;
+  phone: string;
+  addressLine1: string;
+  addressLine2?: string;
+  city: string;
+  state: string;
+  country: string;
+  pincode: string;
+};
+
+export type SellerShippingPreferencesRecord = {
+  _id?: string;
+  sellerId: string;
+  pickupAddress: SellerPickupAddress;
+  packageDefaults?: {
+    weightGrams?: number;
+    lengthCm?: number;
+    widthCm?: number;
+    heightCm?: number;
+  };
+  preferredProvider?: "shiprocket" | "easypost" | "mock";
+  autoCreateOnPayment?: boolean;
+  codEnabled?: boolean;
+  providerRegistrations?: Array<{
+    provider: string;
+    nickname: string;
+    registeredAt?: string;
+  }>;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 // ─── Notification Types ───────────────────────────────────────────────────────
 
 export type NotificationRecord = {

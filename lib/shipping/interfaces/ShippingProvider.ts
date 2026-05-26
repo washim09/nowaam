@@ -72,10 +72,39 @@ export type PickupResult = {
   confirmationNumber?: string;
 };
 
+export type ServiceabilityResult = {
+  available: boolean;
+  codAvailable: boolean;
+  estimatedDays?: number;
+  zone?: string;
+  message?: string;
+};
+
+export type PickupLocationInput = {
+  nickname: string;
+  contactPerson: string;
+  email: string;
+  phone: string;
+  addressLine1: string;
+  addressLine2?: string;
+  city: string;
+  state: string;
+  country: string;
+  pincode: string;
+};
+
 export interface IShippingProvider {
   createShipment(params: CreateShipmentParams): Promise<CreateShipmentResult>;
   buyLabel(providerShipmentId: string, rateId: string): Promise<BuyLabelResult>;
   trackShipment(awbNumber: string): Promise<TrackingResult>;
   cancelShipment(providerShipmentId: string): Promise<void>;
   schedulePickup(providerShipmentId: string, date: Date): Promise<PickupResult>;
+  // Optional India-specific extensions (Shiprocket, Delhivery, etc.)
+  checkServiceability?(
+    fromPincode: string,
+    toPincode: string,
+    weightGrams: number,
+    codAmount?: number,
+  ): Promise<ServiceabilityResult>;
+  registerPickupLocation?(location: PickupLocationInput): Promise<{ nickname: string }>;
 }
