@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { connectToDatabase } from "@/lib/db";
+import { logger, newRequestId } from "@/lib/logger";
 import { processTrackingUpdate } from "@/lib/shipping/process-tracking-update";
 import Shipment from "@/models/Shipment";
 
 export const runtime = "nodejs";
 
-// Shiprocket webhook payload (per https://apidocs.shiprocket.in/#webhook)
+// Generic courier webhook endpoint. Renamed from /webhooks/shiprocket because
+// Shiprocket rejects webhook URLs containing keywords like "shiprocket",
+// "kartrocket", "sr", or "kr". Endpoint behavior is unchanged.
+
 type ShiprocketWebhookPayload = {
   awb: string;
   current_status: string;
@@ -41,9 +45,10 @@ function mapShiprocketStatus(status: string): string {
 }
 
 export async function POST(request: NextRequest) {
+  const log = logger.child({ route: "webhooks/courier-sync", requestId: newRequestId() });
   try {
-    // ── Auth: Shiprocket sends X-Api-Key with the token you configured
-    // in their dashboard (Settings → Webhooks → Token field)
+    // Shiprocket sends the token via the header named in their "Auth Token Type"
+    // dropdown — default is x-api-key. We accept either for safety.
     const providedToken =
       request.headers.get("x-api-key") ??
       request.headers.get("x-shiprocket-token") ??
@@ -51,6 +56,7 @@ export async function POST(request: NextRequest) {
     const expected = process.env.SHIPROCKET_WEBHOOK_TOKEN ?? "";
 
     if (expected && providedToken !== expected) {
+      log.warn("webhook.unauthorized");
       return NextResponse.json({ error: "Invalid webhook token." }, { status: 401 });
     }
 
@@ -61,7 +67,6 @@ export async function POST(request: NextRequest) {
 
     await connectToDatabase();
 
-    // Match shipment by AWB; fallback to providerOrderId
     const shipment = await Shipment.findOne({
       $or: [
         { awbNumber: payload.awb },
@@ -70,7 +75,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!shipment) {
-      console.warn(`[Shiprocket Webhook] No shipment found for AWB ${payload.awb}`);
+      log.warn("webhook.shipment_not_found", { awb: payload.awb, orderId: payload.order_id });
       return NextResponse.json({ received: true });
     }
 
@@ -92,10 +97,18 @@ export async function POST(request: NextRequest) {
       estimatedDeliveryDate: payload.edd ? new Date(payload.edd) : undefined,
     });
 
+    log.info("webhook.processed", {
+      awb: payload.awb,
+      newStatus,
+      shipmentId: String(shipment._id),
+    });
     return NextResponse.json({ received: true });
   } catch (error) {
-    console.error("[Shiprocket Webhook]", error);
-    // Return 200 to prevent Shiprocket from retrying on application errors
+    log.error("webhook.error", {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    // Always return 200 to prevent provider retry storms on app errors
     return NextResponse.json({ received: true });
   }
 }

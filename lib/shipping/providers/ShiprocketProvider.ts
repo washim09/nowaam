@@ -4,8 +4,11 @@ import type {
   CreateShipmentParams,
   CreateShipmentResult,
   IShippingProvider,
+  NdrAction,
+  NdrActionResult,
   PickupLocationInput,
   PickupResult,
+  ProviderCodRemittance,
   ServiceabilityResult,
   ShipmentRate,
   TrackingResult,
@@ -398,5 +401,102 @@ export class ShiprocketProvider implements IShippingProvider {
       { method: "POST", body: JSON.stringify(payload) },
     );
     return { nickname: res.address?.pickup_location ?? location.nickname };
+  }
+
+  /**
+   * Submit an NDR action via Shiprocket's NDR API.
+   * Docs: https://apidocs.shiprocket.in/#7a2a7c0e-f947-4c87-bcf0-e57a98aa9cd5
+   */
+  async submitNdrAction(awb: string, action: NdrAction): Promise<NdrActionResult> {
+    const token = await getToken();
+    // Shiprocket "ndr/action" expects: action ("re-attempt" | "return"), comments, awb
+    type NdrPayload = {
+      action: string;
+      comments?: string;
+      awbs: string[];
+      phone?: string;
+      address?: string;
+    };
+    let payload: NdrPayload;
+    switch (action.kind) {
+      case "reattempt":
+        payload = { action: "re-attempt", comments: action.comment, awbs: [awb] };
+        break;
+      case "rto":
+        payload = { action: "return", comments: action.comment, awbs: [awb] };
+        break;
+      case "edit_address":
+        payload = {
+          action: "re-attempt",
+          comments: action.comment ?? "Address/phone updated by seller",
+          awbs: [awb],
+          phone: action.phone,
+          address: action.address,
+        };
+        break;
+    }
+    type NdrResponse = { message?: string; status?: string; action_id?: string | number };
+    const res = await shiprocketFetch<NdrResponse>("/ndr/action", token, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    return {
+      providerActionId: res.action_id ? String(res.action_id) : undefined,
+      message: res.message ?? "NDR action submitted",
+    };
+  }
+
+  /**
+   * Fetch COD remittance records.
+   * Shiprocket endpoint returns rows of paid + pending COD payouts.
+   */
+  async fetchCodRemittances(): Promise<ProviderCodRemittance[]> {
+    const token = await getToken();
+    type Row = {
+      id?: number | string;
+      cod_remittance_id?: string;
+      remittance_id?: string;
+      amount?: number | string;
+      cod_amount?: number | string;
+      status?: string;
+      remittance_status?: string;
+      paid_status?: string;
+      remittance_date?: string;
+      payout_date?: string;
+      utr?: string;
+      bank_reference?: string;
+      awbs?: string[];
+      awb_list?: string;
+    };
+    type Resp = { data?: Row[] } | Row[];
+    const raw = await shiprocketFetch<Resp>("/account/details/cod-remittance", token);
+    const rows: Row[] = Array.isArray(raw) ? raw : raw?.data ?? [];
+    return rows.map((r) => {
+      const status = (r.remittance_status ?? r.status ?? r.paid_status ?? "pending").toLowerCase();
+      const normalized =
+        status.includes("paid") || status.includes("success")
+          ? "paid"
+          : status.includes("processing")
+            ? "processing"
+            : status.includes("hold")
+              ? "on_hold"
+              : status.includes("fail")
+                ? "failed"
+                : "pending";
+      const awbList =
+        r.awbs ?? (r.awb_list ? String(r.awb_list).split(",").map((s) => s.trim()) : []);
+      return {
+        providerRemittanceId: String(r.cod_remittance_id ?? r.remittance_id ?? r.id ?? ""),
+        amount: Number(r.amount ?? r.cod_amount ?? 0),
+        currency: "INR",
+        status: normalized as ProviderCodRemittance["status"],
+        remittanceDate: r.remittance_date ? new Date(r.remittance_date) : undefined,
+        payoutDate: r.payout_date ? new Date(r.payout_date) : undefined,
+        utr: r.utr,
+        bankReference: r.bank_reference,
+        awbList,
+        raw: r,
+      };
+    });
   }
 }

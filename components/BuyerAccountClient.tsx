@@ -1412,10 +1412,16 @@ function NotificationsTab() {
         <p className="text-[11px] uppercase tracking-[0.22em] text-white/60">About notifications</p>
         <h3 className="mt-3 text-2xl font-semibold tracking-[-0.04em]">How it works</h3>
         <div className="mt-4 grid gap-4 sm:grid-cols-3 text-sm leading-6 text-white/72">
-          <p>Preferences are stored locally on your device and will take effect when real notification infrastructure is integrated.</p>
+          <p>These quick toggles control local preferences. For full channel management including WhatsApp, use the advanced page below.</p>
           <p>Email notifications require a valid email address saved in your Profile tab.</p>
           <p>SMS notifications require a phone number saved in your Profile tab. Standard messaging rates may apply.</p>
         </div>
+        <Link
+          href="/account/notifications"
+          className={buttonStyles({ variant: "secondary", size: "sm", className: "mt-5 border-white/20 text-white hover:bg-white/10" })}
+        >
+          Advanced notification preferences →
+        </Link>
       </div>
     </div>
   );

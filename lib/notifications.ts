@@ -98,4 +98,26 @@ export const NotificationTemplates = {
     message: `₹${amount.toLocaleString("en-IN")} has been credited for order ${orderId.slice(-8)}.`,
     metadata: { orderId, amount: String(amount) },
   }),
+
+  // Seller-facing
+  shipmentAutoCreated: (orderId: string, provider: string) => ({
+    type: "shipment_auto_created",
+    title: "Shipment auto-created",
+    message: `A shipment was created automatically for order ${orderId.slice(-8)} via ${provider}. Pick a courier rate to generate the label.`,
+    metadata: { orderId, provider },
+  }),
+
+  shipmentAutoCreateFailed: (orderId: string, reason: string) => ({
+    type: "shipment_auto_create_failed",
+    title: "Auto-shipment failed — action needed",
+    message: `Couldn't auto-create the shipment for order ${orderId.slice(-8)}: ${reason}. Please create it manually from the Shipments tab.`,
+    metadata: { orderId, reason },
+  }),
+
+  ndrCreated: (orderId: string, awb: string, reason: string) => ({
+    type: "ndr_created",
+    title: "Delivery attempt failed",
+    message: `Delivery failed for order ${orderId.slice(-8)} (AWB ${awb}): ${reason}. Take action from the NDR tab.`,
+    metadata: { orderId, awb, reason },
+  }),
 };

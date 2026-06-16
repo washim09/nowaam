@@ -5,6 +5,8 @@ import { signOut, useSession } from "next-auth/react";
 import { useEffect, useRef, useState } from "react";
 
 import { buttonStyles } from "@/components/Button";
+import { SellerCodRemittanceTab } from "@/components/SellerCodRemittanceTab";
+import { SellerNDRTab } from "@/components/SellerNDRTab";
 import { SellerReturnsTab } from "@/components/SellerReturnsTab";
 import { SellerShipmentsTab } from "@/components/SellerShipmentsTab";
 import { useToast } from "@/components/ToastProvider";
@@ -13,7 +15,7 @@ import { getManufacturerName, getProductCategory } from "@/lib/catalog";
 import { cn, formatCurrency, getFriendlyErrorMessage } from "@/lib/utils";
 import type { FulfillmentStatus, OrderRecord, ProductRecord } from "@/types";
 
-type SellerTab = "listings" | "orders" | "shipments" | "returns" | "analytics";
+type SellerTab = "listings" | "orders" | "shipments" | "ndr" | "cod" | "returns" | "analytics";
 
 function fulfillmentBadge(status?: FulfillmentStatus) {
   if (!status) return null;
@@ -661,6 +663,8 @@ export function SellerDashboardClient() {
     { id: "listings", label: "Listings", count: products.length || undefined },
     { id: "orders", label: "Orders", count: orders.length || undefined },
     { id: "shipments", label: "Shipments" },
+    { id: "ndr", label: "NDR" },
+    { id: "cod", label: "COD" },
     { id: "returns", label: "Returns" },
     { id: "analytics", label: "Analytics" },
   ];
@@ -742,6 +746,8 @@ export function SellerDashboardClient() {
       {activeTab === "shipments" && sellerId && (
         <SellerShipmentsTab sellerId={sellerId} />
       )}
+      {activeTab === "ndr" && <SellerNDRTab />}
+      {activeTab === "cod" && <SellerCodRemittanceTab />}
       {activeTab === "returns" && <SellerReturnsTab />}
       {activeTab === "analytics" && (
         <AnalyticsTab products={products} orders={orders} sellerId={sellerId} />

@@ -44,8 +44,9 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 1. Go to **Settings → Additional Settings → Webhooks**
 2. Set **Webhook URL** to:
    ```
-   https://nowaam.com/api/webhooks/shiprocket
+   https://nowaam.com/api/webhooks/courier-sync
    ```
+   ⚠️ Shiprocket rejects URLs containing the keywords `shiprocket`, `kartrocket`, `sr`, or `kr` — that's why this route is named `courier-sync` rather than `shiprocket`.
    (For local testing use [ngrok](https://ngrok.com) or
    [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/)
    to expose your dev server.)

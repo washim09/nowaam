@@ -5,6 +5,7 @@ import { connectToDatabase } from "@/lib/db";
 import { sendEmail } from "@/lib/email";
 import { formatCurrency } from "@/lib/utils";
 import { verifyRazorpaySignature } from "@/lib/razorpay";
+import { autoCreateShipmentsForOrder } from "@/lib/shipping/auto-create-shipments";
 import Order from "@/models/Order";
 import User from "@/models/User";
 
@@ -175,6 +176,12 @@ export async function POST(request: Request) {
     }
 
     void sendOrderEmails(updatedOrder);
+
+    // Phase 3: Auto-create shipments for sellers who have opted in.
+    // Fire-and-forget — never blocks payment success.
+    void autoCreateShipmentsForOrder(String(updatedOrder._id)).catch((err) => {
+      console.error("[verify] auto-create-shipments error:", err);
+    });
 
     return NextResponse.json({
       success: true,

@@ -107,4 +107,35 @@ export interface IShippingProvider {
     codAmount?: number,
   ): Promise<ServiceabilityResult>;
   registerPickupLocation?(location: PickupLocationInput): Promise<{ nickname: string }>;
+  submitNdrAction?(awb: string, action: NdrAction): Promise<NdrActionResult>;
+  fetchCodRemittances?(filters?: CodRemittanceFilters): Promise<ProviderCodRemittance[]>;
 }
+
+export type NdrAction =
+  | { kind: "reattempt"; comment?: string }
+  | { kind: "rto"; comment?: string }
+  | { kind: "edit_address"; phone?: string; address?: string; comment?: string };
+
+export type NdrActionResult = {
+  providerActionId?: string;
+  message: string;
+};
+
+export type CodRemittanceFilters = {
+  fromDate?: Date;
+  toDate?: Date;
+  status?: string;
+};
+
+export type ProviderCodRemittance = {
+  providerRemittanceId: string;
+  amount: number;
+  currency: string;
+  status: "pending" | "processing" | "paid" | "on_hold" | "failed";
+  remittanceDate?: Date;
+  payoutDate?: Date;
+  utr?: string;
+  bankReference?: string;
+  awbList: string[];
+  raw?: unknown;
+};

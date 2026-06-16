@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { connectToDatabase } from "@/lib/db";
+import { logger, newRequestId } from "@/lib/logger";
 import { applyTrackingResult, isTerminalStatus } from "@/lib/shipping/process-tracking-update";
 import { ShippingService, type ProviderName } from "@/lib/shipping/ShippingService";
 import Shipment from "@/models/Shipment";
@@ -43,6 +44,7 @@ export async function GET(request: NextRequest) {
   }
 
   const startedAt = Date.now();
+  const log = logger.child({ route: "cron/sync-shipments", requestId: newRequestId() });
   const stats = {
     scanned: 0,
     skipped: 0,
@@ -80,9 +82,10 @@ export async function GET(request: NextRequest) {
     for (const shipment of candidates) {
       // Hard time budget — exit cleanly so Vercel doesn't 504
       if (Date.now() - startedAt > HARD_TIME_BUDGET_MS) {
-        console.warn(
-          `[cron sync] Time budget exceeded; processed ${stats.synced}/${stats.scanned}`,
-        );
+        log.warn("cron.time_budget_exceeded", {
+          processed: stats.synced,
+          total: stats.scanned,
+        });
         break;
       }
 
@@ -131,6 +134,7 @@ export async function GET(request: NextRequest) {
     }
 
     stats.durationMs = Date.now() - startedAt;
+    log.info("cron.completed", { ...stats, errorCount: errors.length });
 
     return NextResponse.json({
       success: true,
@@ -141,7 +145,10 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     stats.durationMs = Date.now() - startedAt;
-    console.error("[cron sync] fatal error:", error);
+    log.error("cron.fatal", {
+      error: error instanceof Error ? error.message : String(error),
+      stats,
+    });
     return NextResponse.json(
       {
         success: false,
