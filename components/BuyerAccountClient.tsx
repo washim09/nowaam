@@ -38,9 +38,15 @@ const TRACKING_STEPS = [
   { key: "delivered", label: "Delivered", description: "Order delivered successfully." },
 ];
 
-function getCompletedStepCount(paymentStatus: string, fulfillmentStatus?: string) {
+function getCompletedStepCount(paymentStatus: string, fulfillmentStatus?: string, paymentMode?: string) {
   if (paymentStatus === "failed") return -1;
   if (fulfillmentStatus === "cancelled") return -2;
+  if (paymentMode === "cod" && paymentStatus === "created") {
+    if (fulfillmentStatus === "delivered") return 5;
+    if (fulfillmentStatus === "shipped") return 4;
+    if (fulfillmentStatus === "confirmed" || fulfillmentStatus === "packed" || fulfillmentStatus === "processing") return 3;
+    return 2;
+  }
   if (paymentStatus === "created") return 1;
   if (paymentStatus === "paid") {
     if (fulfillmentStatus === "delivered") return 5;
@@ -362,7 +368,7 @@ function OrdersTab() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              {order.paymentStatus === "paid" && (
+              {(order.paymentStatus === "paid" || order.paymentMode === "cod") && (
                 <Link
                   href={`/invoice/${order._id}`}
                   target="_blank"
@@ -371,7 +377,7 @@ function OrdersTab() {
                   Invoice
                 </Link>
               )}
-              {order.paymentStatus === "created" &&
+              {order.paymentStatus === "created" && order.paymentMode !== "cod" &&
                 order.fulfillmentStatus !== "cancelled" && (
                   <button
                     type="button"
@@ -484,7 +490,7 @@ function TrackingTab() {
   }
 
   const selectedOrder: OrderRecord = orders.find((o) => o._id === selectedOrderId) ?? orders[0];
-  const completedSteps = getCompletedStepCount(selectedOrder.paymentStatus, selectedOrder.fulfillmentStatus);
+  const completedSteps = getCompletedStepCount(selectedOrder.paymentStatus, selectedOrder.fulfillmentStatus, selectedOrder.paymentMode);
   const mainShipment = shipments[0];
 
   const shipStatusColor: Record<string, string> = {
@@ -529,7 +535,7 @@ function TrackingTab() {
                       : order.paymentStatus === "failed" ? "bg-rose-50 text-rose-700"
                       : "bg-brand-50 text-brand-700",
                   )}>
-                    {order.paymentStatus}
+                    {order.paymentMode === "cod" ? "COD" : order.paymentStatus}
                   </span>
                 </div>
               </button>

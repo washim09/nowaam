@@ -438,7 +438,7 @@ function OrdersTab({
                     : order.paymentStatus === "failed" ? "bg-rose-50 text-rose-700"
                     : "bg-amber-50 text-amber-700"
                   )}>
-                    {order.paymentStatus}
+                    {order.paymentMode === "cod" ? "COD" : order.paymentStatus}
                   </span>
                   {fulfillmentBadge(order.fulfillmentStatus)}
                 </div>
@@ -460,12 +460,12 @@ function OrdersTab({
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-brand-100/60 pt-4">
                 <p className="text-2xl font-semibold tracking-[-0.04em] text-brand-900">{formatCurrency(order.totalAmount)}</p>
                 <div className="flex flex-wrap gap-2">
-                  {order.paymentStatus === "paid" && (!order.fulfillmentStatus || order.fulfillmentStatus === "pending" || order.fulfillmentStatus === "confirmed" || order.fulfillmentStatus === "processing") && (
+                  {(order.paymentStatus === "paid" || order.paymentMode === "cod") && (!order.fulfillmentStatus || order.fulfillmentStatus === "pending" || order.fulfillmentStatus === "confirmed" || order.fulfillmentStatus === "processing") && (
                     <button type="button" disabled={updatingId === order._id} onClick={() => updateFulfillment(order._id, "packed")} className={buttonStyles({ variant: "secondary", size: "sm" })}>
                       {updatingId === order._id ? "Updating…" : "Mark as Packed"}
                     </button>
                   )}
-                  {order.paymentStatus === "paid" && (!order.fulfillmentStatus || order.fulfillmentStatus === "pending" || order.fulfillmentStatus === "confirmed" || order.fulfillmentStatus === "processing" || order.fulfillmentStatus === "packed") && (
+                  {(order.paymentStatus === "paid" || order.paymentMode === "cod") && (!order.fulfillmentStatus || order.fulfillmentStatus === "pending" || order.fulfillmentStatus === "confirmed" || order.fulfillmentStatus === "processing" || order.fulfillmentStatus === "packed") && (
                     <button type="button" disabled={updatingId === order._id} onClick={() => updateFulfillment(order._id, "shipped")} className={buttonStyles({ size: "sm" })}>
                       {updatingId === order._id ? "Updating…" : "Mark as Shipped"}
                     </button>

@@ -51,7 +51,9 @@ export async function autoCreateShipmentsForOrder(
     await connectToDatabase();
 
     const order = await Order.findById(orderId).lean();
-    if (!order || order.paymentStatus !== "paid") return result;
+    if (!order) return result;
+    const isCodOrder = order.paymentMode === "cod" && order.paymentStatus === "created";
+    if (!isCodOrder && order.paymentStatus !== "paid") return result;
 
     const delivery = order.deliveryAddress;
     if (!delivery?.fullName || !delivery?.addressLine || !delivery?.pincode) {

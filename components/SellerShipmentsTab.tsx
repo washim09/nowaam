@@ -119,7 +119,7 @@ export function SellerShipmentsTab({ sellerId }: { sellerId: string }) {
         setPendingOrders(
           data.orders.filter(
             (o) =>
-              o.paymentStatus === "paid" &&
+              (o.paymentStatus === "paid" || (o.paymentMode === "cod" && o.paymentStatus === "created")) &&
               (!o.fulfillmentStatus ||
                 o.fulfillmentStatus === "pending" ||
                 o.fulfillmentStatus === "confirmed"),
@@ -331,7 +331,7 @@ export function SellerShipmentsTab({ sellerId }: { sellerId: string }) {
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-brand-100/60 px-6 py-4">
             <div>
               <h3 className="text-xl font-semibold tracking-[-0.04em] text-brand-900">Orders Ready to Ship</h3>
-              <p className="mt-1 text-sm text-stone-500">{pendingOrders.length} paid order{pendingOrders.length !== 1 ? "s" : ""} awaiting shipment</p>
+              <p className="mt-1 text-sm text-stone-500">{pendingOrders.length} order{pendingOrders.length !== 1 ? "s" : ""} awaiting shipment</p>
             </div>
             <button
               type="button"
@@ -348,6 +348,8 @@ export function SellerShipmentsTab({ sellerId }: { sellerId: string }) {
                   <p className="font-mono text-xs text-brand-500">{order._id}</p>
                   <p className="mt-0.5 text-sm font-semibold text-brand-900">
                     {order.items?.length} item{order.items?.length !== 1 ? "s" : ""} · {formatCurrency(order.totalAmount)}
+                    {order.paymentMode === "cod" && <span className="ml-2 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-700">COD</span>}
+                    {order.paymentMode !== "cod" && <span className="ml-2 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-700">Paid</span>}
                   </p>
                   <p className="text-xs text-stone-400">{formatDate(order.createdAt)}</p>
                 </div>

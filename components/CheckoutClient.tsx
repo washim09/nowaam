@@ -51,6 +51,9 @@ export function CheckoutClient() {
   const [couponInput, setCouponInput] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
   const [isCouponLoading, setIsCouponLoading] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<"online" | "cod">("online");
+  const [codEligible, setCodEligible] = useState(false);
+  const [codChecked, setCodChecked] = useState(false);
 
   useEffect(() => {
     if (session?.user?.name) {
@@ -60,6 +63,22 @@ export function CheckoutClient() {
       }));
     }
   }, [session]);
+
+  useEffect(() => {
+    if (!isHydrated || !items.length) { setCodChecked(true); setCodEligible(false); return; }
+    const check = async () => {
+      try {
+        const res = await fetch("/api/orders/cod-eligible", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: items.map((i) => ({ productId: i._id })) }),
+        });
+        const data = (await res.json()) as { eligible?: boolean };
+        setCodEligible(!!data.eligible);
+      } catch { setCodEligible(false); }
+      setCodChecked(true);
+    };
+    void check();
+  }, [isHydrated, items]);
 
   const discountedTotal = appliedCoupon ? Math.max(0, subtotal - appliedCoupon.discount) : subtotal;
 
@@ -249,6 +268,38 @@ export function CheckoutClient() {
     }
   };
 
+  const handleCodOrder = async () => {
+    if (!items.length) { toast({ variant: "info", title: "Cart is empty" }); return; }
+    if (!validateAddress()) return;
+    setIsSubmitting(true);
+    try {
+      const res = await fetch("/api/orders/cod", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: items.map((i) => ({ productId: i._id, quantity: i.quantity })),
+          userLocation,
+          deliveryAddress: { fullName: addressState.fullName, phone: addressState.phone, addressLine: addressState.addressLine, area: addressState.area, city: addressState.city || userLocation, pincode: addressState.pincode },
+          couponCode: appliedCoupon?.code ?? null,
+        }),
+      });
+      const data = (await res.json()) as { success?: boolean; internalOrderId?: string; error?: string };
+      if (!res.ok || !data.success) throw new Error(data.error || "COD order failed.");
+      addOrderToHistory(data.internalOrderId!, session?.user?.id ?? "");
+      clearCart();
+      setSuccessOrderId(data.internalOrderId!);
+      toast({ variant: "success", title: "Order placed!", description: "Your COD order has been confirmed." });
+    } catch (error) {
+      toast({ variant: "error", title: "Order failed", description: getFriendlyErrorMessage(error) });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCheckout = () => {
+    if (paymentMethod === "cod") return handleCodOrder();
+    return handlePayment();
+  };
+
   if (!isHydrated) {
     return (
       <div className="grid gap-6 lg:grid-cols-[1.08fr_0.92fr]">
@@ -272,10 +323,10 @@ export function CheckoutClient() {
       <div className="surface-elevated p-10 text-center">
         <span className="eyebrow">Order confirmed</span>
         <h2 className="mt-4 text-3xl font-semibold tracking-[-0.05em] text-brand-900 sm:text-4xl">
-          Payment completed successfully
+          Order confirmed
         </h2>
         <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-stone-500">
-          Your payment was verified and your internal order ID is{" "}
+          Your order has been placed successfully. Your order ID is{" "}
           <span className="font-semibold text-brand-700">{successOrderId}</span>.
         </p>
         <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
@@ -297,7 +348,7 @@ export function CheckoutClient() {
           Nothing to checkout yet
         </h2>
         <p className="mt-3 text-sm leading-6 text-stone-500">
-          Add items to your cart, then return here to complete your Razorpay payment.
+          Add items to your cart, then return here to complete your order.
         </p>
         <Link href="/products" className={buttonStyles({ size: "lg", className: "mt-6" })}>
           Browse products
@@ -316,8 +367,7 @@ export function CheckoutClient() {
               Delivery and payment details
             </h2>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-stone-500">
-              Enter your address, review the live order summary, and complete payment in the Razorpay
-              test checkout flow.
+              Enter your address, choose a payment method, and place your order.
             </p>
           </div>
 
@@ -413,23 +463,33 @@ export function CheckoutClient() {
           </div>
 
           <div className="surface-panel p-5">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-[11px] uppercase tracking-[0.18em] text-brand-500">
-                  Payment mode
-                </p>
-                <h3 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-brand-900">
-                  Razorpay test checkout
-                </h3>
-              </div>
-              <span className="rounded-full bg-brand-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-700">
-                Test mode
-              </span>
-            </div>
-            <p className="mt-3 text-sm leading-6 text-stone-500">
-              The order is created on the backend first, and payment is marked successful only after
-              signature verification.
+            <p className="text-[11px] uppercase tracking-[0.18em] text-brand-500">
+              Payment method
             </p>
+            <div className="mt-3 space-y-2">
+              <label className={`flex cursor-pointer items-center gap-3 rounded-2xl border-2 p-4 transition-colors ${paymentMethod === "online" ? "border-brand-700 bg-brand-50/50" : "border-brand-100"}`}>
+                <input type="radio" name="paymentMethod" value="online" checked={paymentMethod === "online"} onChange={() => setPaymentMethod("online")} className="accent-brand-700" />
+                <div className="flex-1">
+                  <p className="font-semibold text-brand-900">Online Payment</p>
+                  <p className="text-xs text-stone-500">Pay via Cards, UPI, Netbanking, or Wallet</p>
+                </div>
+                <span className="rounded-full bg-brand-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-brand-700">
+                  Razorpay
+                </span>
+              </label>
+              {codChecked && codEligible && (
+                <label className={`flex cursor-pointer items-center gap-3 rounded-2xl border-2 p-4 transition-colors ${paymentMethod === "cod" ? "border-brand-700 bg-brand-50/50" : "border-brand-100"}`}>
+                  <input type="radio" name="paymentMethod" value="cod" checked={paymentMethod === "cod"} onChange={() => setPaymentMethod("cod")} className="accent-brand-700" />
+                  <div className="flex-1">
+                    <p className="font-semibold text-brand-900">Cash on Delivery</p>
+                    <p className="text-xs text-stone-500">Pay when you receive the order</p>
+                  </div>
+                  <span className="rounded-full bg-amber-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-700">
+                    COD
+                  </span>
+                </label>
+              )}
+            </div>
           </div>
         </div>
       </section>
@@ -527,19 +587,18 @@ export function CheckoutClient() {
 
           <button
             type="button"
-            onClick={handlePayment}
+            onClick={handleCheckout}
             disabled={isSubmitting}
             className={buttonStyles({
               size: "lg",
               className: "mt-6 w-full bg-white text-brand-900 hover:bg-sand-100",
             })}
           >
-            {isSubmitting ? "Processing..." : `Pay ${formatCurrency(discountedTotal)}`}
+            {isSubmitting ? "Processing..." : paymentMethod === "cod" ? `Place COD Order — ${formatCurrency(discountedTotal)}` : `Pay ${formatCurrency(discountedTotal)}`}
           </button>
 
           <p className="mt-4 text-sm leading-6 text-white/68">
-            Use Razorpay test credentials for development payments. No real charge is created in test
-            mode.
+            {paymentMethod === "cod" ? "You will pay the delivery agent when your order arrives." : "Use Razorpay test credentials for development payments. No real charge is created in test mode."}
           </p>
         </div>
 
